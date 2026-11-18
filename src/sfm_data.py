@@ -105,11 +105,8 @@ def process_views(sfm, sfm_path, model, predictor, output_folder, mask_path=None
         image_path = resolve_view_image(view, sfm_path)
         view_mask = resolve_mask(mask_path, view_id)
         safe_view_id = re.sub(r"[^A-Za-z0-9_.-]", "_", view_id)
-        image_name = os.path.splitext(os.path.basename(image_path))[0]
-        output_path = os.path.join(
-            output_folder,
-            "{:06d}_{}_{}_result.png".format(index, safe_view_id, image_name),
-        )
+        # One map per view, named after its viewId (unique), so the Meshroom 2D viewer can find it.
+        output_path = os.path.join(output_folder, "{}.png".format(safe_view_id))
         if logger:
             logger.info("Predicting image: {}".format(image_path))
         predictor.process_image(

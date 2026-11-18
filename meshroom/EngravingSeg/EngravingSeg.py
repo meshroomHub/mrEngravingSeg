@@ -7,8 +7,6 @@ import tempfile
 
 from meshroom.core import desc
 
-def mapExtension(node):
-    return ".exr" if node.outputFormat.value == "exr" else ".png"
 
 MODEL_FILES = {
     "dbos_50ep": ("dbos_50ep.h5", "19qkTXnonjysb5fa8I4xrm9hZFbpulSW-"),
@@ -104,15 +102,6 @@ preserves the input views, poses and intrinsics while referencing the generated 
             exclusive=True,
             invalidate=False,
         ),
-        desc.File(
-            name="engravingsmaps",
-            label="Engravings Maps",
-            description="Engraving maps.",
-            semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/<POSE_ID>" + mapExtension(attr.node),
-            commandLineGroup="",
-            enabled=True,
-        ),
     ]
 
     outputs = [
@@ -131,9 +120,10 @@ preserves the input views, poses and intrinsics while referencing the generated 
         desc.File(
             name="predictions",
             label="Predictions",
-            description="Grayscale prediction map for each SfMData view.",
+            description="Grayscale prediction maps (<viewId>.png), shown in the 2D viewer. The viewer looks them up "
+                        "by pose, which matches photometric-stereo outputs (one view per pose, viewId == poseId).",
             semantic="image",
-            value="{nodeCacheFolder}/*_result.png",
+            value="{nodeCacheFolder}/<POSE_ID>.png",
             commandLineGroup="",
         ),
     ]

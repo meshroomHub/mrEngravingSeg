@@ -4,6 +4,7 @@ version = "1.0.0"
 description = "Meshroom plugin for tiled engraving segmentation."
 requires-python = ">=3.10,<3.12"
 dependencies = [
+    "psutil", # Meshroom runtime dependency of the compute process
     "Pillow==10.4.0",
     "gdown>=5.2,<6",
     "tensorflow==2.13.1",

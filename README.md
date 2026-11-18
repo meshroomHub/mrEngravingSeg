@@ -1,0 +1,41 @@
+# EngravingSeg Meshroom plugin
+
+This plugin wraps [`src/predict_image.py`](src/predict_image.py) as a Meshroom node. It processes every view in an
+input SfMData, using tiled Keras inference, and writes a grayscale probability map per view. The output SfMData
+preserves the input views, poses and intrinsics while pointing each view to its generated prediction map.
+
+## Requirements and installation
+
+TensorFlow 2.13.1 supports Python 3.10 and 3.11; use a compatible Meshroom Python environment. From this directory:
+
+```bash
+UV_PROJECT_ENVIRONMENT=venv uv sync
+export MESHROOM_PLUGINS_PATH="$PWD:$MESHROOM_PLUGINS_PATH"
+```
+
+For PowerShell:
+
+```powershell
+$env:UV_PROJECT_ENVIRONMENT = "venv"
+uv sync
+$env:MESHROOM_PLUGINS_PATH = (Get-Location).Path
+```
+
+The `EngravingSeg` node appears in the **Segmentation** category. On its first computation it downloads the
+selected model from Google Drive using `gdown`; subsequent computations reuse the file in `weights/`. A custom `.h5`
+model can be provided through **Model File** instead.
+
+## Node parameters
+
+| Parameter | Default | Description |
+|---|---:|---|
+| SfMData | — | SfMData with view image paths (`.sfm` or `.json`; other formats require pyalicevision) |
+| Model | `dbos_50ep` | Select `dbos_50ep` or `limeuil10_50ep` |
+| Mask or Mask Folder | — | Optional grayscale mask shared by all views, or a folder with masks named `<viewId>.png` |
+| Stride | `256` | Pixel step between patches; cannot exceed Patch Size |
+| Patch Size | `512` | Square input patch size |
+| Normalization | `standard` | `standard`, `simple`, or `none` |
+| Mask Threshold | `127` | Grayscale threshold for the optional mask |
+| Model File | — | Optional custom Keras `.h5` model |
+
+The node outputs the prediction images in its cache folder and an `engravingSeg.sfm` referencing those images.

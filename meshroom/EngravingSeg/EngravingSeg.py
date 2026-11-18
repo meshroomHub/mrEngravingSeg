@@ -1,0 +1,233 @@
+__version__ = "1.0"
+
+import importlib.util
+import os
+import sys
+import tempfile
+
+from meshroom.core import desc
+
+
+MODEL_FILES = {
+    "dbos_50ep": ("dbos_50ep.h5", "19qkTXnonjysb5fa8I4xrm9hZFbpulSW-"),
+    "limeuil10_50ep": ("limeuil10_50ep.h5", "1EomhgcvoZQADykeCRyRuGj6hpFozK7SA"),
+}
+
+
+class EngravingSeg(desc.Node):
+    """Run tiled Keras engraving segmentation on every view of an SfMData."""
+
+    __nodeInfo__ = [
+        ("method", "EngravingSeg: tiled image segmentation using the supplied Keras model."),
+        ("methodLicense", "Not specified in the supplied source."),
+    ]
+
+    category = "Segmentation"
+    gpu = desc.Level.INTENSIVE
+    size = desc.StaticNodeSize(1)
+
+    documentation = """
+Segment engraved regions in every view of an input SfMData.
+
+The node uses the predictor in `src/predict_image.py`. It downloads the selected `.h5` model
+from Google Drive on first use (via gdown), unless the model is already present in `weights/`
+or a custom Model File is provided. Results are grayscale PNG probability maps; the output SfMData
+preserves the input views, poses and intrinsics while referencing the generated maps.
+"""
+
+    inputs = [
+        desc.File(
+            name="inputSfm",
+            label="SfMData",
+            description="SfMData whose views contain the images to segment (.sfm or .json; other formats require pyalicevision).",
+            value="",
+        ),
+        desc.ChoiceParam(
+            name="model",
+            label="Model",
+            description="Pretrained model to use.",
+            value="dbos_50ep",
+            values=["dbos_50ep", "limeuil10_50ep"],
+            exclusive=True,
+        ),
+        desc.File(
+            name="maskPath",
+            label="Mask or Mask Folder",
+            description="Optional grayscale mask for all views, or a folder containing one mask per view named <viewId>.png.",
+            value="",
+        ),
+        desc.IntParam(
+            name="stride",
+            label="Stride",
+            description="Step between prediction patches in pixels; must not exceed Patch Size.",
+            value=256,
+            range=(1, 4096, 1),
+        ),
+        desc.IntParam(
+            name="patchSize",
+            label="Patch Size",
+            description="Square patch size passed to the model (default: 512).",
+            value=512,
+            range=(1, 8192, 1),
+        ),
+        desc.ChoiceParam(
+            name="normalization",
+            label="Normalization",
+            description="Input normalization: standard ((x - 127.5) / 127.5), simple (x / 255), or none.",
+            value="standard",
+            values=["standard", "simple", "none"],
+            exclusive=True,
+        ),
+        desc.IntParam(
+            name="maskThreshold",
+            label="Mask Threshold",
+            description="Mask values strictly above this grayscale threshold are included.",
+            value=127,
+            range=(0, 255, 1),
+        ),
+        desc.File(
+            name="modelPath",
+            label="Model File",
+            description="Optional custom Keras .h5 model. If empty, the selected pretrained model is used.",
+            value="",
+            advanced=True,
+        ),
+        desc.ChoiceParam(
+            name="verboseLevel",
+            label="Verbose Level",
+            description="Verbosity level (fatal, error, warning, info, debug).",
+            value="info",
+            values=["fatal", "error", "warning", "info", "debug"],
+            exclusive=True,
+            invalidate=False,
+        ),
+    ]
+
+    outputs = [
+        desc.File(
+            name="outputFolder",
+            label="Output Folder",
+            description="Folder containing the grayscale prediction PNG for every SfMData view.",
+            value="{nodeCacheFolder}",
+        ),
+        desc.File(
+            name="outputSfmData",
+            label="Output SfMData",
+            description="Copy of the input SfMData with view image paths updated to the prediction maps.",
+            value="{nodeCacheFolder}/engravingSeg.sfm",
+        ),
+        desc.File(
+            name="predictions",
+            label="Predictions",
+            description="Grayscale prediction map for each SfMData view.",
+            semantic="image",
+            value="{nodeCacheFolder}/*_result.png",
+            commandLineGroup="",
+        ),
+    ]
+
+    @staticmethod
+    def resolveModelPath(node, logger):
+        if node.modelPath.value:
+            path = os.path.abspath(node.modelPath.value)
+            if not os.path.isfile(path):
+                raise FileNotFoundError("Model File does not exist: {}".format(path))
+            return path
+
+        modelFile, driveId = MODEL_FILES[node.model.value]
+        pluginRoot = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        weightsFolder = os.path.join(pluginRoot, "weights")
+        modelPath = os.path.join(weightsFolder, modelFile)
+        if os.path.isfile(modelPath):
+            return modelPath
+
+        os.makedirs(weightsFolder, exist_ok=True)
+        descriptor, temporaryPath = tempfile.mkstemp(prefix=modelFile + ".", suffix=".download",
+                                                     dir=weightsFolder)
+        os.close(descriptor)
+        try:
+            import gdown
+
+            logger.info("Downloading {} from Google Drive.".format(modelFile))
+            downloaded = gdown.download(id=driveId, output=temporaryPath, quiet=True)
+            if not downloaded or not os.path.isfile(temporaryPath) or os.path.getsize(temporaryPath) == 0:
+                raise RuntimeError("gdown did not download the selected model: {}".format(modelFile))
+            os.replace(temporaryPath, modelPath)
+        finally:
+            if os.path.exists(temporaryPath):
+                os.remove(temporaryPath)
+        return modelPath
+
+    @staticmethod
+    def importPredictor():
+        moduleName = "_meshroom_engravingseg_predict_image"
+        if moduleName in sys.modules:
+            return sys.modules[moduleName]
+
+        sourcePath = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "src", "predict_image.py")
+        )
+        if not os.path.isfile(sourcePath):
+            raise FileNotFoundError("EngravingSeg predictor not found: {}".format(sourcePath))
+        spec = importlib.util.spec_from_file_location(moduleName, sourcePath)
+        if spec is None or spec.loader is None:
+            raise ImportError("Cannot load EngravingSeg predictor: {}".format(sourcePath))
+
+        predictor = importlib.util.module_from_spec(spec)
+        sys.modules[moduleName] = predictor
+        try:
+            spec.loader.exec_module(predictor)
+        except Exception:
+            del sys.modules[moduleName]
+            raise
+        return predictor
+
+    @staticmethod
+    def importSfmData():
+        moduleName = "_meshroom_engravingseg_sfm_data"
+        if moduleName in sys.modules:
+            return sys.modules[moduleName]
+
+        sourcePath = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "src", "sfm_data.py")
+        )
+        if not os.path.isfile(sourcePath):
+            raise FileNotFoundError("EngravingSeg SfMData helpers not found: {}".format(sourcePath))
+        spec = importlib.util.spec_from_file_location(moduleName, sourcePath)
+        if spec is None or spec.loader is None:
+            raise ImportError("Cannot load EngravingSeg SfMData helpers: {}".format(sourcePath))
+
+        sfmData = importlib.util.module_from_spec(spec)
+        sys.modules[moduleName] = sfmData
+        try:
+            spec.loader.exec_module(sfmData)
+        except Exception:
+            del sys.modules[moduleName]
+            raise
+        return sfmData
+
+    def processChunk(self, chunk):
+        try:
+            chunk.logManager.start(chunk.node.verboseLevel.value)
+            node = chunk.node
+            sfmData = self.importSfmData()
+            sfm = sfmData.load_sfm(node.inputSfm.value, node.outputFolder.value)
+            predictor = self.importPredictor()
+            modelPath = self.resolveModelPath(node, chunk.logger)
+            model = predictor.load_model(modelPath)
+            result = sfmData.process_views(
+                sfm,
+                node.inputSfm.value,
+                model,
+                predictor,
+                node.outputFolder.value,
+                mask_path=node.maskPath.value or None,
+                stride=node.stride.value,
+                patch_size=node.patchSize.value,
+                normalization=node.normalization.value,
+                mask_threshold=node.maskThreshold.value,
+                logger=chunk.logger,
+            )
+            sfmData.save_sfm(result, node.outputSfmData.value)
+        finally:
+            chunk.logManager.end()

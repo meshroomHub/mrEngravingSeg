@@ -1,0 +1,15 @@
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+/.venv
+/venv
+/checkpoints
+/dataset
+/gravure
+/masque
+/mur
+/out
+/test_imgs
+/unet_models
+/weights

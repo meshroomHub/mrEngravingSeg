@@ -7,6 +7,8 @@ import tempfile
 
 from meshroom.core import desc
 
+def mapExtension(node):
+    return ".exr" if node.outputFormat.value == "exr" else ".png"
 
 MODEL_FILES = {
     "dbos_50ep": ("dbos_50ep.h5", "19qkTXnonjysb5fa8I4xrm9hZFbpulSW-"),
@@ -101,6 +103,15 @@ preserves the input views, poses and intrinsics while referencing the generated 
             values=["fatal", "error", "warning", "info", "debug"],
             exclusive=True,
             invalidate=False,
+        ),
+        desc.File(
+            name="engravingsmaps",
+            label="Engravings Maps",
+            description="Engraving maps.",
+            semantic="image",
+            value=lambda attr: "{nodeCacheFolder}/<POSE_ID>" + mapExtension(attr.node),
+            commandLineGroup="",
+            enabled=True,
         ),
     ]
 

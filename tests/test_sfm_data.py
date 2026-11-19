@@ -97,7 +97,7 @@ def test_resolve_mask_by_source_image_filename(tmp_path):
     ) == str(mask_path)
 
 
-def test_process_views_passes_mask_named_like_source_image(tmp_path):
+def test_process_views_passes_mask_and_binary_output_paths(tmp_path):
     images = tmp_path / "images"
     images.mkdir()
     image_path = images / "00000000.png"
@@ -117,9 +117,21 @@ def test_process_views_passes_mask_named_like_source_image(tmp_path):
         @staticmethod
         def process_image(image_path, model, **kwargs):
             assert kwargs["mask_path"] == str(mask_path)
+            assert kwargs["binary_output_path"] == str(tmp_path / "out" / "binary" / "1258694240.png")
+            assert kwargs["binary_threshold"] == 180
+            os.makedirs(os.path.dirname(kwargs["binary_output_path"]), exist_ok=True)
             Image.fromarray(np.zeros((3, 4), dtype=np.uint8)).save(kwargs["output_path"])
+            Image.fromarray(np.zeros((3, 4), dtype=np.uint8)).save(kwargs["binary_output_path"])
 
-    sfm_data.process_views(sfm, str(sfm_path), None, Predictor, str(tmp_path / "out"), str(masks))
+    sfm_data.process_views(
+        sfm,
+        str(sfm_path),
+        None,
+        Predictor,
+        str(tmp_path / "out"),
+        str(masks),
+        binary_threshold=180,
+    )
 
 
 def test_missing_view_mask_is_reported(tmp_path):

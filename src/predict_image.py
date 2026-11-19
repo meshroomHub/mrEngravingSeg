@@ -85,11 +85,13 @@ def load_model(model_path):
 
 
 def process_image(img_path, model, mask_path=None, stride=256, patch_size=512, fun_img=None, output_dir='out',
-                  output_path=None):
+                  output_path=None, binary_output_path=None, binary_threshold=127):
     if stride <= 0 or patch_size <= 0:
         raise ValueError("Stride and Patch Size must be positive.")
     if stride > patch_size:
         raise ValueError("Stride must not exceed Patch Size.")
+    if not 0 <= binary_threshold <= 255:
+        raise ValueError("Binary threshold must be between 0 and 255.")
     if fun_img is None:
         fun_img = get_normalization_function('standard')
 
@@ -145,6 +147,12 @@ def process_image(img_path, model, mask_path=None, stride=256, patch_size=512, f
     out_path = os.path.abspath(output_path)
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     im.save(out_path)
+
+    if binary_output_path is not None:
+        binary_out_path = os.path.abspath(binary_output_path)
+        os.makedirs(os.path.dirname(binary_out_path), exist_ok=True)
+        binary_img = (result_img[:, :, 0] > binary_threshold).astype(np.uint8) * 255
+        Image.fromarray(binary_img, mode='L').save(binary_out_path)
     return out_path
 
 def parse_args():

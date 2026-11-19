@@ -37,10 +37,12 @@ model can be provided through **Model File** instead.
 | Stride | `256` | Pixel step between patches; cannot exceed Patch Size |
 | Patch Size | `512` | Square input patch size |
 | Normalization | `standard` | `standard`, `simple`, or `none` |
+| Binary Threshold | `127` | Grayscale prediction values strictly above this value become white (`255`) in the binary mask; other pixels become black (`0`) |
 | Model File | — | Optional custom Keras `.h5` model |
 
-The node outputs one prediction image per pose as `<poseId>.png` in its cache folder, so the maps are available
-in Meshroom's image viewer, and an `engravingSeg.sfm` referencing those images.
+The node outputs one grayscale probability map per pose as `<poseId>.png`, one thresholded binary mask as
+`binary/<poseId>.png`, and an `engravingSeg.sfm` referencing the probability maps. Both image outputs are
+available in Meshroom's image viewer.
 
 ---
 

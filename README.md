@@ -40,9 +40,100 @@ model can be provided through **Model File** instead.
 | Binary Threshold | `127` | Grayscale prediction values strictly above this value become white (`255`) in the binary mask; other pixels become black (`0`) |
 | Model File | — | Optional custom Keras `.h5` model |
 
-The node outputs one grayscale probability map per pose as `<poseId>.png`, one thresholded binary mask as
-`binary/<poseId>.png`, and an `engravingSeg.sfm` referencing the probability maps. Both image outputs are
-available in Meshroom's image viewer.
+## Node outputs
+
+| Output | Path | Description |
+|---|---|---|
+| Output Folder | `{nodeCacheFolder}` | Cache directory containing all generated files |
+| Output SfMData | `{nodeCacheFolder}/engravingSeg.sfm` | Copy of the input SfMData with image paths pointing to the grayscale probability maps |
+| Engravings Maps | `<poseId>.png` | Grayscale probability map for each pose; visible in Meshroom's image viewer |
+| Binary Masks | `binary/<poseId>.png` | Thresholded black-and-white segmentation mask for each pose; visible in Meshroom's image viewer |
+
+## Template exemple
+
+The graph below shows one possible workflow. The calibrated and uncalibrated photometric-stereo branches are
+alternatives; choose the one matching the acquisition and available light information. The photogrammetry branch
+builds a mesh independently from images captured at different viewpoints.
+
+```mermaid
+flowchart LR
+    I["Multi-lighting images + SfMData"]
+
+    I --> CPS["PhotometricStereo<br/>AliceVision<br/>known light directions"]
+    I --> UPS["UniMSPS<br/>uncalibrated lighting"]
+    CPS --> N["Normal-map SfMData"]
+    UPS --> N
+    N --> E["EngravingSeg"]
+    E --> B["Binary Masks<br/>binary/&lt;poseId&gt;.png"]
+
+    V["Multi-view SfMData<br/>distinct viewpoints"] --> FE["FeatureExtraction"]
+    FE --> IM["ImageMatching"]
+    IM --> FM["FeatureMatching"]
+    FM --> SFM["StructureFromMotion"]
+    SFM --> PDS["PrepareDenseScene"]
+    PDS --> DM["DepthMap"]
+    DM --> DMF["DepthMapFilter"]
+    DMF --> M["Meshing"]
+
+    SFM --> T["Texturing"]
+    M --> T
+    B --> T
+```
+
+Use a multi-view SfMData whose images cover distinct viewpoints for the photogrammetry branch; the multiple-light
+images grouped for PS are not in themselves multiple viewpoints. In `Texturing`, connect that SfMData to
+**Input**, the `Meshing` result to **Mesh**, and the binary-mask folder to **Images Folder**. AliceVision's
+`Texturing` matches files in that folder by image UID. EngravingSeg names masks by `poseId`; if these IDs differ
+from the image UIDs in the SfMData connected to `Texturing`, copy or rename the masks to the corresponding UID
+filenames first. The resulting texture uses the binary masks (black and white) instead of the original photographs.
+
+## Development
+
+### Test
+From the project directory, synchronize the project environment and run the test suite with `pytest` supplied
+temporarily by `uv`:
+
+```bash
+UV_PROJECT_ENVIRONMENT=venv uv sync
+UV_PROJECT_ENVIRONMENT=venv uv run --frozen --with pytest python -m pytest -q
+```
+
+For PowerShell:
+
+```powershell
+$env:UV_PROJECT_ENVIRONMENT = "venv"
+uv sync
+uv run --frozen --with pytest python -m pytest -q
+```
+
+### Plugin Structure
+
+```text
+mrEngravingSeg/
+├── meshroom/
+│   └── EngravingSeg/
+│       ├── EngravingSeg.py   # Meshroom node: UI parameters, outputs, model loading and processChunk
+│       └── __init__.py       # Makes the node package discoverable by Meshroom
+├── src/
+│   ├── predict_image.py      # Tiled Keras inference, input masks, probability and binary PNG output
+│   └── sfm_data.py           # SfMData I/O, view/mask resolution and per-pose prediction orchestration
+├── tests/
+│   ├── test_predict.py       # Image prediction, mask application and threshold tests
+│   └── test_sfm_data.py      # SfMData and mask/output-path tests
+├── weights/                  # Bundled pretrained .h5 models (also the cache for downloaded models)
+├── pyproject.toml             # Project metadata, Python constraints and runtime dependencies
+├── requirements.txt           # Pip-compatible runtime dependency list
+├── uv.lock                    # Locked dependency versions for uv
+└── README.md
+```
+
+At runtime, Meshroom discovers `meshroom/EngravingSeg` and calls the node's `processChunk`. The node loads the
+input SfMData and Keras model, then delegates view and pose handling to `src/sfm_data.py`. That module resolves
+each source image and its optional mask, calls `src/predict_image.py` for tiled inference, and updates the copied
+SfMData with the generated probability-map paths. The predictor saves the grayscale map as `<poseId>.png` and the
+thresholded binary mask as `binary/<poseId>.png` in the node cache. Unit tests cover the prediction and SfMData
+layers independently of Meshroom.
+
 
 ---
 

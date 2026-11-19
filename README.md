@@ -39,6 +39,7 @@ model can be provided through **Model File** instead.
 | Mask or Mask Folder | — | Optional black-and-white mask shared by all views, or a folder with masks named `<viewId>` or after the source image; white pixels are included and black pixels are excluded from the output |
 | Stride | `256` | Pixel step between patches; cannot exceed Patch Size |
 | Patch Size | `512` | Square input patch size |
+| Tiles per Batch | `8` | Number of tiles inferred together; increase to improve GPU utilization, or reduce if GPU memory is insufficient |
 | Normalization | `standard` | `standard`, `simple`, or `none` |
 | Binary Threshold | `127` | Grayscale prediction values strictly above this value become white (`255`) in the binary mask; other pixels become black (`0`) |
 | Model File | — | Optional custom Keras `.h5` model |

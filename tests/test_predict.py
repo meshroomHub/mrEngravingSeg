@@ -9,12 +9,21 @@ from src import predict_image
 
 class ConstantModel:
     def predict(self, patch, verbose=0):
-        return np.ones((1, patch.shape[1], patch.shape[2], 1), dtype=np.float32)
+        return np.ones((patch.shape[0], patch.shape[1], patch.shape[2], 1), dtype=np.float32)
 
 
 class ProbabilityGridModel:
     def predict(self, patch, verbose=0):
         return np.array([[[[0.2], [0.5]], [[0.8], [1.0]]]], dtype=np.float32)
+
+
+class CountingModel(ConstantModel):
+    def __init__(self):
+        self.batch_sizes = []
+
+    def predict(self, patch, verbose=0):
+        self.batch_sizes.append(patch.shape[0])
+        return super().predict(patch, verbose)
 
 
 def test_configure_tensorflow_device_logs_cpu_fallback(monkeypatch, capsys):
@@ -90,6 +99,25 @@ def test_process_image_writes_thresholded_binary_map(tmp_path):
         np.asarray(Image.open(binary_path)),
         np.array([[0, 0], [255, 255]], dtype=np.uint8),
     )
+
+
+def test_process_image_predicts_multiple_tiles_per_batch(tmp_path):
+    image_path = tmp_path / "image.png"
+    Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8)).save(image_path)
+    model = CountingModel()
+
+    output_path = predict_image.process_image(
+        str(image_path),
+        model,
+        stride=2,
+        patch_size=2,
+        batch_size=3,
+        fun_img=lambda values: values,
+        output_dir=str(tmp_path / "output"),
+    )
+
+    assert model.batch_sizes == [3, 1]
+    np.testing.assert_array_equal(np.asarray(Image.open(output_path)), np.full((4, 4), 255, dtype=np.uint8))
 
 
 def test_stride_cannot_exceed_patch_size(tmp_path):

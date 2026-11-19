@@ -71,6 +71,13 @@ referencing the generated probability maps.
             value=512,
             range=(1, 8192, 1),
         ),
+        desc.IntParam(
+            name="batchSize",
+            label="Tiles per Batch",
+            description="Number of image tiles predicted together. Increase to improve GPU utilization; reduce if GPU memory is insufficient.",
+            value=4,
+            range=(1, 32, 1),
+        ),
         desc.ChoiceParam(
             name="normalization",
             label="Normalization",
@@ -233,6 +240,7 @@ referencing the generated probability maps.
                 mask_path=node.maskPath.value or None,
                 stride=node.stride.value,
                 patch_size=node.patchSize.value,
+                batch_size=node.batchSize.value,
                 normalization=node.normalization.value,
                 logger=chunk.logger,
                 binary_threshold=node.binaryThreshold.value,

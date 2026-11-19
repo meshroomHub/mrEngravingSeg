@@ -1,6 +1,6 @@
 [project]
 name = "mrEngravingSeg"
-version = "1.1.1"
+version = "1.1.2"
 description = "Meshroom plugin for tiled engraving segmentation."
 requires-python = ">=3.10,<3.12"
 dependencies = [

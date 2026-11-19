@@ -119,6 +119,7 @@ def test_process_views_passes_mask_and_binary_output_paths(tmp_path):
             assert kwargs["mask_path"] == str(mask_path)
             assert kwargs["binary_output_path"] == str(tmp_path / "out" / "binary" / "1258694240.png")
             assert kwargs["binary_threshold"] == 180
+            assert kwargs["batch_size"] == 6
             os.makedirs(os.path.dirname(kwargs["binary_output_path"]), exist_ok=True)
             Image.fromarray(np.zeros((3, 4), dtype=np.uint8)).save(kwargs["output_path"])
             Image.fromarray(np.zeros((3, 4), dtype=np.uint8)).save(kwargs["binary_output_path"])
@@ -131,6 +132,7 @@ def test_process_views_passes_mask_and_binary_output_paths(tmp_path):
         str(tmp_path / "out"),
         str(masks),
         binary_threshold=180,
+        batch_size=6,
     )
 
 

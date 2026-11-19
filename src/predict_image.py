@@ -51,7 +51,8 @@ def f1_score_metric(y_true, y_pred):
     return f1
 
 # Main
-def main(img_path, model_path, mask_path=None, stride=256, patch_size=512, fun_img=None, output_dir='out'):
+def main(img_path, model_path, mask_path=None, stride=256, patch_size=512, fun_img=None, output_dir='out',
+         batch_size=4):
     model = load_model(model_path)
     if fun_img is None:
         fun_img = get_normalization_function('standard')
@@ -68,7 +69,7 @@ def main(img_path, model_path, mask_path=None, stride=256, patch_size=512, fun_i
 
     for index, img_file in enumerate(img_files, 1):
         print(f"Traitement de l'image : {img_file} ({index} sur {len(img_files)})")
-        process_image(img_file, model, mask_path, stride, patch_size, fun_img, output_dir)
+        process_image(img_file, model, mask_path, stride, patch_size, fun_img, output_dir, batch_size=batch_size)
 
 
 def configure_tensorflow_device(logger=None):
@@ -104,13 +105,15 @@ def load_model(model_path, logger=None):
 
 
 def process_image(img_path, model, mask_path=None, stride=256, patch_size=512, fun_img=None, output_dir='out',
-                  output_path=None, binary_output_path=None, binary_threshold=127):
+                  output_path=None, binary_output_path=None, binary_threshold=127, batch_size=4):
     if stride <= 0 or patch_size <= 0:
         raise ValueError("Stride and Patch Size must be positive.")
     if stride > patch_size:
         raise ValueError("Stride must not exceed Patch Size.")
     if not 0 <= binary_threshold <= 255:
         raise ValueError("Binary threshold must be between 0 and 255.")
+    if batch_size <= 0:
+        raise ValueError("Batch Size must be positive.")
     if fun_img is None:
         fun_img = get_normalization_function('standard')
 
@@ -129,27 +132,32 @@ def process_image(img_path, model, mask_path=None, stride=256, patch_size=512, f
     count_map = np.zeros((orig_height, orig_width, 1), dtype=np.float32)
 
     patch_coords = [(y, x) for y in range(0, orig_height, stride) for x in range(0, orig_width, stride)]
-    for y, x in patch_coords:
-        # passer la boucle si le patch est entièrement en dehors du masque
-        if mask_path:
+    for batch_start in range(0, len(patch_coords), batch_size):
+        batch_patches = []
+        batch_coords = []
+        for y, x in patch_coords[batch_start:batch_start + batch_size]:
             h = min(patch_size, orig_height - y)
             w = min(patch_size, orig_width - x)
-            if not np.any(mask_array[y:y+h, x:x+w]):
+            if mask_path and not np.any(mask_array[y:y+h, x:x+w]):
                 continue
 
-        patch = orig_img_array[y:y+patch_size, x:x+patch_size, :]
-        pad_h = patch_size - patch.shape[0]
-        pad_w = patch_size - patch.shape[1]
-        if pad_h > 0 or pad_w > 0:
-            patch = np.pad(patch, ((0, pad_h), (0, pad_w), (0,0)), mode='constant')
-        patch = np.expand_dims(patch, axis=0)
-        pred = model.predict(patch, verbose=0)[0]
-        if pred.shape[-1] > 1:
-            pred = pred[..., 0:1]
-        h = min(patch_size, orig_height - y)
-        w = min(patch_size, orig_width - x)
-        result_img[y:y+h, x:x+w, 0] += (pred[:h, :w, 0] * 255).astype(np.float32)
-        count_map[y:y+h, x:x+w, 0] += 1
+            patch = orig_img_array[y:y+patch_size, x:x+patch_size, :]
+            pad_h = patch_size - patch.shape[0]
+            pad_w = patch_size - patch.shape[1]
+            if pad_h > 0 or pad_w > 0:
+                patch = np.pad(patch, ((0, pad_h), (0, pad_w), (0, 0)), mode='constant')
+            batch_patches.append(patch)
+            batch_coords.append((y, x, h, w))
+
+        if not batch_patches:
+            continue
+
+        predictions = model.predict(np.stack(batch_patches), verbose=0)
+        if predictions.shape[-1] > 1:
+            predictions = predictions[..., 0:1]
+        for (y, x, h, w), pred in zip(batch_coords, predictions):
+            result_img[y:y+h, x:x+w, 0] += (pred[:h, :w, 0] * 255).astype(np.float32)
+            count_map[y:y+h, x:x+w, 0] += 1
     
     count_map[count_map == 0] = 1  # éviter division par zéro
     result_img = result_img / count_map
@@ -181,6 +189,7 @@ def parse_args():
     parser.add_argument('--mask-path', type=str, default=None, help='Chemin vers le masque (optionnel)')
     parser.add_argument('--stride', type=int, default=256, help='Stride pour le découpage en patchs (défaut: 256)')
     parser.add_argument('--patch-size', type=int, default=512, help='Taille des patchs (défaut: 512)')
+    parser.add_argument('--batch-size', type=int, default=8, help='Nombre de patchs prédits par lot (défaut: 8)')
     parser.add_argument('--norm', type=str, default='standard', choices=['standard', 'simple', 'none'], 
                         help='Type de normalisation: standard ((x-127.5)/127.5), simple (x/255), none (défaut: standard)')
     parser.add_argument('--output-dir', type=str, default='out', help='Dossier de sortie pour les résultats (défaut: out)')
@@ -201,5 +210,6 @@ if __name__ == "__main__":
         stride=args.stride,
         patch_size=args.patch_size,
         fun_img=fun_img,
-        output_dir=args.output_dir
+        output_dir=args.output_dir,
+        batch_size=args.batch_size,
     )

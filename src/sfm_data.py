@@ -88,7 +88,7 @@ def resolve_mask(mask_path, view_id, image_path=None):
 
 
 def process_views(sfm, sfm_path, model, predictor, output_folder, mask_path=None, stride=256, patch_size=512,
-                  normalization="standard", logger=None, binary_threshold=127):
+                  normalization="standard", logger=None, binary_threshold=127, batch_size=8):
     """Predict each view and return a copied SfMData referencing the generated maps."""
     views = sfm.get("views")
     if not isinstance(views, list) or not views:
@@ -97,6 +97,8 @@ def process_views(sfm, sfm_path, model, predictor, output_folder, mask_path=None
         raise ValueError("Stride and Patch Size must be positive, and Stride cannot exceed Patch Size.")
     if not 0 <= binary_threshold <= 255:
         raise ValueError("Binary threshold must be between 0 and 255.")
+    if batch_size <= 0:
+        raise ValueError("Batch Size must be positive.")
 
     output_sfm = copy.deepcopy(sfm)
     output_folder = os.path.abspath(output_folder)
@@ -133,6 +135,7 @@ def process_views(sfm, sfm_path, model, predictor, output_folder, mask_path=None
             output_path=output_path,
             binary_output_path=binary_output_path,
             binary_threshold=binary_threshold,
+            batch_size=batch_size,
         )
         view["path"] = output_path
 

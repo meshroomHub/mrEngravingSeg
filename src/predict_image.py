@@ -51,7 +51,7 @@ def f1_score_metric(y_true, y_pred):
     return f1
 
 # Main
-def main(img_path, model_path, mask_path=None, stride=256, patch_size=512, fun_img=None, output_dir='out', mask_threshold=127):
+def main(img_path, model_path, mask_path=None, stride=256, patch_size=512, fun_img=None, output_dir='out'):
     model = load_model(model_path)
     if fun_img is None:
         fun_img = get_normalization_function('standard')
@@ -68,7 +68,7 @@ def main(img_path, model_path, mask_path=None, stride=256, patch_size=512, fun_i
 
     for index, img_file in enumerate(img_files, 1):
         print(f"Traitement de l'image : {img_file} ({index} sur {len(img_files)})")
-        process_image(img_file, model, mask_path, stride, patch_size, fun_img, output_dir, mask_threshold)
+        process_image(img_file, model, mask_path, stride, patch_size, fun_img, output_dir)
 
 
 def load_model(model_path):
@@ -85,7 +85,7 @@ def load_model(model_path):
 
 
 def process_image(img_path, model, mask_path=None, stride=256, patch_size=512, fun_img=None, output_dir='out',
-                  mask_threshold=127, output_path=None):
+                  output_path=None):
     if stride <= 0 or patch_size <= 0:
         raise ValueError("Stride and Patch Size must be positive.")
     if stride > patch_size:
@@ -101,9 +101,7 @@ def process_image(img_path, model, mask_path=None, stride=256, patch_size=512, f
     # Charger le masque si fourni
     if mask_path:
         mask_img = image.load_img(mask_path, color_mode='grayscale', target_size=(orig_height, orig_width))
-        mask_array = image.img_to_array(mask_img) > mask_threshold  # seuil binaire
-        if mask_array.shape[-1] == 3:
-            mask_array = mask_array[..., 0:1]
+        mask_array = image.img_to_array(mask_img)[..., 0] > 0
 
     # Préparer une image de sortie vide (1 canal pour noir et blanc)
     result_img = np.zeros((orig_height, orig_width, 1), dtype=np.float32)
@@ -115,7 +113,7 @@ def process_image(img_path, model, mask_path=None, stride=256, patch_size=512, f
         if mask_path:
             h = min(patch_size, orig_height - y)
             w = min(patch_size, orig_width - x)
-            if not np.any(mask_array[y:y+h, x:x+w, 0]):
+            if not np.any(mask_array[y:y+h, x:x+w]):
                 continue
 
         patch = orig_img_array[y:y+patch_size, x:x+patch_size, :]
@@ -134,6 +132,8 @@ def process_image(img_path, model, mask_path=None, stride=256, patch_size=512, f
     
     count_map[count_map == 0] = 1  # éviter division par zéro
     result_img = result_img / count_map
+    if mask_path:
+        result_img *= mask_array[..., np.newaxis]
     result_img = np.clip(result_img, 0, 255).astype(np.uint8)
 
     # Convertir en image PIL en mode 'L' (noir et blanc)
@@ -157,7 +157,6 @@ def parse_args():
     parser.add_argument('--norm', type=str, default='standard', choices=['standard', 'simple', 'none'], 
                         help='Type de normalisation: standard ((x-127.5)/127.5), simple (x/255), none (défaut: standard)')
     parser.add_argument('--output-dir', type=str, default='out', help='Dossier de sortie pour les résultats (défaut: out)')
-    parser.add_argument('--mask-threshold', type=int, default=127, help='Seuil pour le masque binaire (défaut: 127)')
     return parser.parse_args()
 
 
@@ -175,6 +174,5 @@ if __name__ == "__main__":
         stride=args.stride,
         patch_size=args.patch_size,
         fun_img=fun_img,
-        output_dir=args.output_dir,
-        mask_threshold=args.mask_threshold
+        output_dir=args.output_dir
     )

@@ -12,12 +12,13 @@ class ConstantModel:
         return np.ones((1, patch.shape[1], patch.shape[2], 1), dtype=np.float32)
 
 
-def test_mask_keeps_patches_that_partially_overlap(tmp_path):
+@pytest.mark.parametrize("mask_value", [1, 255])
+def test_mask_is_applied_to_prediction_pixels(tmp_path, mask_value):
     image_path = tmp_path / "image.png"
     mask_path = tmp_path / "mask.png"
     Image.fromarray(np.full((4, 4, 3), 127, dtype=np.uint8)).save(image_path)
     mask = np.zeros((4, 4), dtype=np.uint8)
-    mask[0, 0] = 255
+    mask[0, 0] = mask_value
     Image.fromarray(mask).save(mask_path)
 
     output_path = predict_image.process_image(
@@ -31,9 +32,9 @@ def test_mask_keeps_patches_that_partially_overlap(tmp_path):
     )
 
     result = np.asarray(Image.open(output_path))
-    assert np.all(result[:2, :2] == 255)
-    assert np.all(result[2:, :] == 0)
-    assert np.all(result[:, 2:] == 0)
+    expected = np.zeros((4, 4), dtype=np.uint8)
+    expected[0, 0] = 255
+    np.testing.assert_array_equal(result, expected)
 
 
 def test_stride_cannot_exceed_patch_size(tmp_path):

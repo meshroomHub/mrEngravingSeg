@@ -7,9 +7,6 @@ import tempfile
 
 from meshroom.core import desc
 
-def mapExtension(node):
-    return ".exr" if node.outputFormat.value == "exr" else ".png"
-
 MODEL_FILES = {
     "dbos_50ep": ("dbos_50ep.h5", "19qkTXnonjysb5fa8I4xrm9hZFbpulSW-"),
     "limeuil10_50ep": ("limeuil10_50ep.h5", "1EomhgcvoZQADykeCRyRuGj6hpFozK7SA"),
@@ -56,7 +53,7 @@ preserves the input views, poses and intrinsics while referencing the generated 
         desc.File(
             name="maskPath",
             label="Mask or Mask Folder",
-            description="Optional grayscale mask for all views, or a folder containing one mask per view named <viewId>.png.",
+            description="Optional black-and-white mask: white pixels are included, black pixels are excluded. Use one mask for all views or a folder with masks named after the view ID or source image.",
             value="",
         ),
         desc.IntParam(
@@ -81,13 +78,6 @@ preserves the input views, poses and intrinsics while referencing the generated 
             values=["standard", "simple", "none"],
             exclusive=True,
         ),
-        desc.IntParam(
-            name="maskThreshold",
-            label="Mask Threshold",
-            description="Mask values strictly above this grayscale threshold are included.",
-            value=127,
-            range=(0, 255, 1),
-        ),
         desc.File(
             name="modelPath",
             label="Model File",
@@ -103,15 +93,6 @@ preserves the input views, poses and intrinsics while referencing the generated 
             values=["fatal", "error", "warning", "info", "debug"],
             exclusive=True,
             invalidate=False,
-        ),
-        desc.File(
-            name="engravingsmaps",
-            label="Engravings Maps",
-            description="Engraving maps.",
-            semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/<POSE_ID>" + mapExtension(attr.node),
-            commandLineGroup="",
-            enabled=True,
         ),
     ]
 
@@ -129,11 +110,11 @@ preserves the input views, poses and intrinsics while referencing the generated 
             value="{nodeCacheFolder}/engravingSeg.sfm",
         ),
         desc.File(
-            name="predictions",
-            label="Predictions",
-            description="Grayscale prediction map for each SfMData view.",
+            name="engravingsmaps",
+            label="Engravings Maps",
+            description="Grayscale segmentation map for each pose, named <poseId>.png.",
             semantic="image",
-            value="{nodeCacheFolder}/*_result.png",
+            value="{nodeCacheFolder}/<POSE_ID>.png",
             commandLineGroup="",
         ),
     ]
@@ -237,7 +218,6 @@ preserves the input views, poses and intrinsics while referencing the generated 
                 stride=node.stride.value,
                 patch_size=node.patchSize.value,
                 normalization=node.normalization.value,
-                mask_threshold=node.maskThreshold.value,
                 logger=chunk.logger,
             )
             sfmData.save_sfm(result, node.outputSfmData.value)

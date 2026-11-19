@@ -1,7 +1,6 @@
 import copy
 import json
 import os
-import re
 import tempfile
 
 
@@ -64,13 +63,20 @@ def resolve_view_image(view, sfm_path):
     return image_path
 
 
-def resolve_mask(mask_path, view_id):
+def resolve_mask(mask_path, view_id, image_path=None):
     if not mask_path:
         return None
     if os.path.isdir(mask_path):
+        extensions = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+        names = [view_id]
+        if image_path:
+            image_name = os.path.splitext(os.path.basename(image_path))[0]
+            if image_name not in names:
+                names.append(image_name)
         candidates = [
-            os.path.join(mask_path, "{}{}".format(view_id, extension))
-            for extension in (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp")
+            os.path.join(mask_path, "{}{}".format(name, extension))
+            for name in names
+            for extension in extensions
         ]
         for candidate in candidates:
             if os.path.isfile(candidate):
@@ -82,7 +88,7 @@ def resolve_mask(mask_path, view_id):
 
 
 def process_views(sfm, sfm_path, model, predictor, output_folder, mask_path=None, stride=256, patch_size=512,
-                  normalization="standard", mask_threshold=127, logger=None):
+                  normalization="standard", logger=None):
     """Predict each view and return a copied SfMData referencing the generated maps."""
     views = sfm.get("views")
     if not isinstance(views, list) or not views:
@@ -95,21 +101,22 @@ def process_views(sfm, sfm_path, model, predictor, output_folder, mask_path=None
     os.makedirs(output_folder, exist_ok=True)
     normalize = predictor.get_normalization_function(normalization)
     used_view_ids = set()
+    used_pose_ids = set()
 
-    for index, view in enumerate(output_sfm["views"], 1):
+    for view in output_sfm["views"]:
         view_id = str(view.get("viewId", ""))
         if not view_id or view_id in used_view_ids:
             raise ValueError("SfMData views must have unique, non-empty viewId values.")
         used_view_ids.add(view_id)
 
+        pose_id = str(view.get("poseId", ""))
+        if not pose_id or os.path.basename(pose_id) != pose_id or pose_id in used_pose_ids:
+            raise ValueError("EngravingSeg requires unique, non-empty, filename-safe poseId values.")
+        used_pose_ids.add(pose_id)
+
         image_path = resolve_view_image(view, sfm_path)
-        view_mask = resolve_mask(mask_path, view_id)
-        safe_view_id = re.sub(r"[^A-Za-z0-9_.-]", "_", view_id)
-        image_name = os.path.splitext(os.path.basename(image_path))[0]
-        output_path = os.path.join(
-            output_folder,
-            "{:06d}_{}_{}_result.png".format(index, safe_view_id, image_name),
-        )
+        view_mask = resolve_mask(mask_path, view_id, image_path)
+        output_path = os.path.join(output_folder, "{}.png".format(pose_id))
         if logger:
             logger.info("Predicting image: {}".format(image_path))
         predictor.process_image(
@@ -120,7 +127,6 @@ def process_views(sfm, sfm_path, model, predictor, output_folder, mask_path=None
             patch_size=patch_size,
             fun_img=normalize,
             output_dir=output_folder,
-            mask_threshold=mask_threshold,
             output_path=output_path,
         )
         view["path"] = output_path

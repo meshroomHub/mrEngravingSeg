@@ -1,3 +1,5 @@
 pillow==10.4.0
-tensorflow==2.13.1
+tensorflow[and-cuda]==2.15.1; sys_platform == "linux"
+tensorflow==2.15.1; sys_platform != "linux"
 gdown>=5.2,<6
+psutil>=5.9,<8

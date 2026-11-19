@@ -8,7 +8,10 @@ pipeline.
 
 ## Requirements and installation
 
-TensorFlow 2.13.1 supports Python 3.10 and 3.11; use a compatible Meshroom Python environment. From this directory:
+TensorFlow 2.15.1 supports Python 3.10 and 3.11; use a compatible Meshroom Python environment. `psutil` is included
+for Meshroom's compute process. On Linux, the `and-cuda` extra installs the CUDA 12.2 and cuDNN libraries required
+by TensorFlow; a compatible NVIDIA driver is still required. TensorFlow automatically uses a detected GPU for
+supported operations and otherwise runs on CPU. From this directory:
 
 ```bash
 UV_PROJECT_ENVIRONMENT=venv uv sync

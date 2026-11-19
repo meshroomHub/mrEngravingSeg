@@ -17,6 +17,27 @@ class ProbabilityGridModel:
         return np.array([[[[0.2], [0.5]], [[0.8], [1.0]]]], dtype=np.float32)
 
 
+def test_configure_tensorflow_device_logs_cpu_fallback(monkeypatch, capsys):
+    monkeypatch.setattr(predict_image.tf.config, "list_physical_devices", lambda device_type: [])
+
+    assert predict_image.configure_tensorflow_device() == []
+    assert "inference will run on CPU" in capsys.readouterr().out
+
+
+def test_configure_tensorflow_device_enables_gpu_memory_growth(monkeypatch):
+    gpu = type("GPU", (), {"name": "/physical_device:GPU:0"})()
+    configured_gpus = []
+    monkeypatch.setattr(predict_image.tf.config, "list_physical_devices", lambda device_type: [gpu])
+    monkeypatch.setattr(
+        predict_image.tf.config.experimental,
+        "set_memory_growth",
+        lambda device, enabled: configured_gpus.append((device, enabled)),
+    )
+
+    assert predict_image.configure_tensorflow_device() == [gpu]
+    assert configured_gpus == [(gpu, True)]
+
+
 @pytest.mark.parametrize("mask_value", [1, 255])
 def test_mask_is_applied_to_prediction_pixels(tmp_path, mask_value):
     image_path = tmp_path / "image.png"

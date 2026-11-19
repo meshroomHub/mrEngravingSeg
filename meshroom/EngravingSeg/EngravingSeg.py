@@ -223,7 +223,7 @@ referencing the generated probability maps.
             sfm = sfmData.load_sfm(node.inputSfm.value, node.outputFolder.value)
             predictor = self.importPredictor()
             modelPath = self.resolveModelPath(node, chunk.logger)
-            model = predictor.load_model(modelPath)
+            model = predictor.load_model(modelPath, logger=chunk.logger)
             result = sfmData.process_views(
                 sfm,
                 node.inputSfm.value,

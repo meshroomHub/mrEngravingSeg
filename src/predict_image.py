@@ -71,8 +71,27 @@ def main(img_path, model_path, mask_path=None, stride=256, patch_size=512, fun_i
         process_image(img_file, model, mask_path, stride, patch_size, fun_img, output_dir)
 
 
-def load_model(model_path):
+def configure_tensorflow_device(logger=None):
+    """Enable GPU memory growth when available; TensorFlow places supported ops automatically."""
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        message = "TensorFlow detected GPU(s): {}.".format(", ".join(gpu.name for gpu in gpus))
+    else:
+        message = "TensorFlow did not detect a GPU; inference will run on CPU."
+
+    if logger is not None:
+        logger.info(message)
+    else:
+        print(message)
+
+    return gpus
+
+
+def load_model(model_path, logger=None):
     """Load a Keras model with the custom training losses and metric."""
+    configure_tensorflow_device(logger)
     return tf.keras.models.load_model(
         model_path,
         custom_objects={

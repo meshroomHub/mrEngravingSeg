@@ -1,12 +1,14 @@
 [project]
 name = "mrEngravingSeg"
-version = "1.1.0"
+version = "1.1.1"
 description = "Meshroom plugin for tiled engraving segmentation."
 requires-python = ">=3.10,<3.12"
 dependencies = [
     "Pillow==10.4.0",
     "gdown>=5.2,<6",
-    "tensorflow==2.13.1",
+    "psutil>=5.9,<8",
+    "tensorflow[and-cuda]==2.15.1; sys_platform == 'linux'",
+    "tensorflow==2.15.1; sys_platform != 'linux'",
 ]
 
 [tool.uv]
@@ -14,4 +16,4 @@ package = false
 
 [tool.meshroom]
 publisher = "meshroomHub"
-requirements = "Python 3.10 or 3.11; TensorFlow 2.13.1."
+requirements = "Python 3.10 or 3.11; TensorFlow 2.15.1; psutil."
